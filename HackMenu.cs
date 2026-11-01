@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,1038 +6,758 @@ namespace UniversalHack
 {
     public class HackMenu : MonoBehaviour
     {
-        public static List<string> ActiveFeatures = new List<string>();
-        public static readonly object Lock = new object();
         public static bool ShowMenu { get; private set; } = true;
+        public static readonly HashSet<string> ActiveFeatures = new HashSet<string>();
+        public static readonly object Lock = new object();
 
-        private readonly string[][] MENUS = new[]
+        private readonly string[][] MENUS = new string[][]
         {
-            new[] { "事件类", "无视校长互动" , "无视袜子互动", "禁用巴迪移动", "直接激活愤怒", "聋哑巴迪", "无巴迪", "无校长", "无袜子", "无欢乐时间", "无扫把", "无第一名", "无校霸" , "书黑客"},
-            new[] { "玩家类", "无敌", "无限体力", "无限道具","物品编辑器","左键破坏"},
-            new[] { "视觉类", "绘制", "放大镜", "增大视野", "追踪器", "禁用遮挡剔除"},
-            new[] { "移动类", "穿墙", "移速", "无视推动", "飞行"},
-            new[] { "扩展类", "场景跳转", "数值修改器"},
-            new[] { "主菜单", "功能列表", "水印","帧率显示" }
+            new []{ "事件类", "无巴迪", "无校长", "无袜子", "无欢乐时间", "无扫把", "无第一名", "无校霸",
+                    "收集一个书", "触发一次出口", "自动答题" },
+            new []{ "移动类", "穿墙", "移速", "任意跳跃" },
+            new []{ "玩家类", "无敌", "无限体力", "无限道具" },
+            new []{ "视觉类", "绘制", "放大镜", "增大视野", "追踪器", "控件描边",
+                    "红温模式", "贴图旋转", "Disco 模式", "手电筒", "FPS 显示", "3D 自由视角" },
+            new []{ "音乐类", "音乐UI缩放", "墙壁随音乐抖动", "颜色随音乐", "音量警告" },
+            new []{ "玩笑类", "镜像模式", "翻转模式", "欺骗模式", "墙壁抖动" },
+            new []{ "物品类" },
         };
 
-        private readonly string[][] MENUS_EN = new[]
+        private readonly string[][] MENUS_EN = new string[][]
         {
-            new[] { "Events", "Ignore Principal" , "Ignore Crafters", "Disable Baldi Move", "Instant Rage", "Deaf Baldi", "No Baldi", "No Principal", "No Crafters", "No Playtime", "No Sweep", "No First Prize", "No Bully" , "Book Hacker"},
-            new[] { "Player", "God Mode", "Infinite Stamina", "Infinite Items","Item Editor","Click Destroy"},
-            new[] { "Visual", "ESP", "Magnifier", "FOV", "Tracker", "Disable OC"},
-            new[] { "Movement", "No Clip", "Speed", "Anti Push", "Fly" },
-            new[] { "Expand", "Scene Hack", "Value Hack"},
-            new[] { "Main", "Feature List", "Watermark", "Show FPS" }
-
+            new []{ "Events", "No Baldi", "No Principal", "No Crafters", "No Playtime", "No Sweep", "No First Prize", "No Bully",
+                    "Collect One Notebook", "Trigger Exit Once", "Auto Answer" },
+            new []{ "Movement", "No Clip", "Speed", "Jump Anywhere" },
+            new []{ "Player", "God Mode", "Infinite Stamina", "Infinite Items" },
+            new []{ "Visual", "ESP", "Magnifier", "FOV", "Tracker", "Outline",
+                    "Red Light", "Texture Rotate", "Disco", "Flashlight", "Show FPS", "3D Free Camera" },
+            new []{ "Music", "Music UI Scale", "Music Wall Shake", "Music Color", "LOUD WARNING" },
+            new []{ "Fun", "Mirror Mode", "Fliparoo", "Deception", "Wall Shake" },
+            new []{ "Items" },
         };
 
-        private readonly string[] OVERLAY_TEXT_CN = new[]
-        {
-            "Tab 键控制菜单开关，",
-            "右下角 English Mode 复选框控制切换中文和英文，",
-            "右下角 Gradient Effect 复选框控制渐变开关，",
-            "右下角 Scale 按钮控制 GUI 缩放，",
-            "书黑客：开启功能后，Q 键增加笔记本，E 键减少笔记本，",
-            "物品编辑器：开启功能后，I 键显示窗口，",
-            "场景跳转：开启功能后，J 键显示窗口，",
-            "数值修改器：开启功能后，K 键显示窗口。"
-        };
+        private readonly Dictionary<string, string> enMap = new Dictionary<string, string>();
+        private readonly Dictionary<string, bool> featureStates = new Dictionary<string, bool>();
+        private readonly Dictionary<string, Rect> menuRects = new Dictionary<string, Rect>();
+        private readonly Dictionary<string, bool> menuExpanded = new Dictionary<string, bool>();
+        private readonly Dictionary<string, bool> isDragging = new Dictionary<string, bool>();
+        private readonly Dictionary<string, Vector2> dragOffset = new Dictionary<string, Vector2>();
+        private readonly Dictionary<string, Rect> initialMenuRects = new Dictionary<string, Rect>();
+        private readonly Dictionary<string, bool> initialMenuExpanded = new Dictionary<string, bool>();
 
-        private readonly string[] OVERLAY_TEXT_EN = new[]
-        {
-    "Press Tab to toggle the menu on or off,",
-    "Use the English Mode checkbox in the bottom-right corner to switch between Chinese and English,",
-    "Use the Gradient Effect checkbox in the bottom-right corner to toggle the gradient effect,",
-    "Use the Scale button in the bottom-right corner to adjust the GUI scale,",
-    "Book Hacker: When enabled, press Q to add a notebook and E to remove a notebook,",
-    "Item Editor: When enabled, press I to open the window,",
-    "Scene Hack: When enabled, press J to open the window,",
-    "Value Hack: When enabled, press K to open the window."
-};
-
-        private Dictionary<string, bool> featureStates = new Dictionary<string, bool>();
-        private Dictionary<string, Rect> menuRects = new Dictionary<string, Rect>();
-        private Dictionary<string, bool> menuExpanded = new Dictionary<string, bool>();
-        private Dictionary<string, bool> isDragging = new Dictionary<string, bool>();
-        private Dictionary<string, Vector2> dragOffset = new Dictionary<string, Vector2>();
-
-        private float hue = 0f;
+        private float hue;
         private bool showMenu = true;
-        private bool hideOverlayOnly = false;
-        private bool englishMode = true;
+        private bool hideOverlayOnly;
+        private bool englishMode;
         private bool gradientEffect = true;
-        private bool hideCoverOnly = false;
+        private bool hideCoverOnly;
         private float scalePercent = 50f;
-        private bool showScaleDialog = false;
+        private bool showScaleDialog;
         private string scaleInput = "50";
-
-        private float fpsCurrent = 0f;
-        private float fpsMax = 0f;
-        private float fpsAvg = 0f;
-        private float fpsAccumTime = 0f;
-        private int fpsFrameCount = 0;
-        private const float FPS_AVG_INTERVAL = 0.5f;
-
-        private Texture2D whiteTex;
-        private Texture2D bgTex;
-        private Texture2D titleBgTex;
-        private Texture2D blackTex;
-        private Texture2D grayTex;
-        private Texture2D checkTex;
-        private Texture2D dialogBgTex;
-
-        private const float BASE_SCALE = 0.75f;
-        private const float ALPHA_BG = 0.33f;
-        private const float CHECKBOX_SIZE = 24f;
-
-        private const float CTRL_WIDTH = 280f;
-        private const float CTRL_HEIGHT = 32f;
-        private const float CTRL_GAP = 4f;
-        private const float CTRL_PAD = 20f;
-
         private float lastToggleTime = -1f;
-        private const float TOGGLE_COOLDOWN = 0.15f;
+        private float lastStyleScale = -1f;
+        private int lastScreenWidth = -1;
+        private int lastScreenHeight = -1;
 
-        private Dictionary<string, Rect> initialMenuRects = new Dictionary<string, Rect>();
-        private Dictionary<string, bool> initialMenuExpanded = new Dictionary<string, bool>();
-        private bool initialEnglishMode = false;
+        private bool initialEnglishMode;
         private bool initialGradientEffect = true;
-        private bool initialHideCoverOnly = false;
+        private bool initialHideCoverOnly;
         private float initialScalePercent = 50f;
 
-        private GUIStyle cachedTitleStyle;
-        private GUIStyle cachedButtonStyle;
-        private GUIStyle cachedButtonActiveStyle;
-        private GUIStyle cachedListItemStyle;
-        private GUIStyle cachedControlStyle;
-        private GUIStyle cachedControlLabelStyle;
-        private GUIStyle cachedDialogStyle;
-        private GUIStyle cachedDialogButtonStyle;
-        private float lastStyleScale = -1f;
+        private Texture2D whiteTex, bgTex, titleBgTex, grayTex, checkTex;
 
-        private float GetScale()
+        private GUIStyle cachedTitleStyle, cachedButtonStyle, cachedButtonActiveStyle,
+                          cachedControlStyle, cachedControlLabelStyle,
+                          cachedDialogStyle, cachedDialogButtonStyle;
+
+        private const string ItemMenuKey = "物品类";
+
+        private float GetScale() => 0.75f * (0.5f + this.scalePercent / 100f);
+
+        private void Awake()
         {
-            return BASE_SCALE * (0.5f + scalePercent / 100f);
-        }
-
-        void Awake()
-        {
-            whiteTex = MakeTex(Color.white);
-            bgTex = MakeTex(new Color(1f, 1f, 1f, ALPHA_BG));
-            titleBgTex = MakeTex(Color.white);
-            blackTex = MakeTex(new Color(0f, 0f, 0f, 0.54f));
-            grayTex = MakeTex(new Color(0f, 0f, 0f, 0.6f));
-            checkTex = MakeTex(new Color(0f, 0.8f, 0.2f, 1f));
-            dialogBgTex = MakeTex(new Color(0.1f, 0.1f, 0.15f, 0.95f));
-
-            RecalculateMenuPositions();
-
-            lock (Lock)
+            try
             {
-                ActiveFeatures.Add("功能列表");
-                ActiveFeatures.Add("水印");
-                ActiveFeatures.Add("帧率显示");
-            }
+                this.whiteTex   = MakeTex(Color.white);
+                this.bgTex      = MakeTex(new Color(1f, 1f, 1f, 0.33f));
+                this.titleBgTex = MakeTex(Color.white);
+                this.grayTex    = MakeTex(new Color(0f, 0f, 0f, 0.6f));
+                this.checkTex   = MakeTex(new Color(0f, 0.8f, 0.2f, 1f));
 
-            featureStates["功能列表"] = true;
-            featureStates["水印"] = true;
-            featureStates["帧率显示"] = true;
-
-            initialEnglishMode = true;
-            initialGradientEffect = gradientEffect;
-            initialHideCoverOnly = hideCoverOnly;
-            initialScalePercent = scalePercent;
-        }
-
-        void RecalculateMenuPositions()
-        {
-            float scale = GetScale();
-            float startX = 40f * scale;
-            float startY = 40f * scale;
-            float menuWidth = 300f * scale;
-            float titleHeight = 72f * scale;
-
-            foreach (var menu in MENUS)
-            {
-                string title = menu[0];
-                Rect rect = new Rect(startX, startY, menuWidth, titleHeight);
-                menuRects[title] = rect;
-                menuExpanded[title] = true;
-                isDragging[title] = false;
-                startX += menuWidth + 20f * scale;
-
-                if (!initialMenuRects.ContainsKey(title))
+                for (int i = 0; i < this.MENUS.Length; i++)
                 {
-                    initialMenuRects[title] = rect;
-                    initialMenuExpanded[title] = true;
-                }
-            }
-        }
-
-        void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.Tab))
-            {
-                TryToggle();
-            }
-
-            if (showScaleDialog && Input.GetKeyDown(KeyCode.Escape))
-            {
-                showScaleDialog = false;
-            }
-
-            UpdateFPS();
-        }
-
-        void UpdateFPS()
-        {
-            float delta = Time.unscaledDeltaTime;
-            if (delta <= 0f) return;
-
-            float instantFps = 1f / delta;
-            if (instantFps > fpsMax)
-                fpsMax = instantFps;
-
-            fpsAccumTime += delta;
-            fpsFrameCount++;
-            if (fpsAccumTime >= FPS_AVG_INTERVAL)
-            {
-                fpsCurrent = fpsFrameCount / fpsAccumTime;
-                fpsAvg = fpsFrameCount / fpsAccumTime;
-                fpsAccumTime = 0f;
-                fpsFrameCount = 0;
-            }
-        }
-
-        void OnGUI()
-        {
-            Event e = Event.current;
-
-            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Tab)
-            {
-                if (TryToggle())
-                {
-                    e.Use();
-                }
-            }
-
-            if (e.type == EventType.Repaint)
-            {
-                if (gradientEffect)
-                {
-                    hue = (Time.realtimeSinceStartup * 90f) % 360f;
+                    var cn = this.MENUS[i];
+                    var en = this.MENUS_EN[i];
+                    int n = Mathf.Min(cn.Length, en.Length);
+                    for (int j = 0; j < n; j++) this.enMap[cn[j]] = en[j];
                 }
 
-                if (showMenu)
+                this.RecalculateMenuPositions();
+                this.lastScreenWidth  = Screen.width;
+                this.lastScreenHeight = Screen.height;
+
+                foreach (var menu in this.MENUS)
+                    for (int i = 1; i < menu.Length; i++)
+                        this.featureStates[menu[i]] = false;
+
+                this.initialEnglishMode    = this.englishMode;
+                this.initialGradientEffect = this.gradientEffect;
+                this.initialHideCoverOnly  = this.hideCoverOnly;
+                this.initialScalePercent   = this.scalePercent;
+
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+            }
+            catch (Exception ex) { ModLog.Error("HackMenu.Awake", ex); }
+        }
+
+        private void Update()
+        {
+            try
+            {
+                if (Input.GetKeyDown(KeyCode.Tab)) this.TryToggle();
+                if (this.showScaleDialog && Input.GetKeyDown(KeyCode.Escape)) this.showScaleDialog = false;
+
+                if (Screen.width != this.lastScreenWidth || Screen.height != this.lastScreenHeight)
                 {
-                    if (!hideOverlayOnly)
+                    this.lastScreenWidth  = Screen.width;
+                    this.lastScreenHeight = Screen.height;
+                    this.RecalculateMenuPositions();
+                    foreach (var kv in this.menuRects)
+                        this.menuRects[kv.Key] = this.ClampRectToScreen(kv.Value);
+                    this.lastStyleScale = -1f;
+                }
+            }
+            catch (Exception ex) { ModLog.Error("HackMenu.Update", ex); }
+        }
+
+        private void OnGUI()
+        {
+            try
+            {
+                GUI.depth = -100;
+
+                var cur = Event.current;
+                if (cur.type == EventType.KeyDown && cur.keyCode == KeyCode.Tab && this.TryToggle())
+                    cur.Use();
+
+                if (cur.type == EventType.Repaint)
+                {
+                    if (this.gradientEffect) this.hue = Time.realtimeSinceStartup * 90f % 360f;
+                    if (this.showMenu)
                     {
-                        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), grayTex);
-                        DrawOverlayText();
-                        DrawBottomRightControls();
+                        if (!this.hideOverlayOnly)
+                        {
+                            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), this.grayTex);
+                            this.DrawBottomRightControls();
+                        }
+                        this.DrawMenus();
                     }
-                    DrawMenusRepaint();
+                    ModLog.DrawScreenMessages();
+                }
+                else if (this.showMenu &&
+                        (cur.type == EventType.MouseDown ||
+                         cur.type == EventType.MouseUp ||
+                         cur.type == EventType.MouseDrag))
+                {
+                    this.HandleInput(cur);
+                    if (!this.hideOverlayOnly && cur.type != EventType.Used)
+                        this.HandleBottomRightInput(cur);
                 }
 
-                DrawWatermark();
-                DrawFeatureList();
-                DrawFPSDisplay();
+                if (this.showScaleDialog) this.DrawScaleDialog();
             }
-            else if (showMenu && (e.type == EventType.MouseDown || e.type == EventType.MouseUp || e.type == EventType.MouseDrag))
-            {
-                HandleMenuInput(e);
-                if (!hideOverlayOnly)
-                    HandleBottomRightInput(e);
-            }
-
-            if (showScaleDialog)
-            {
-                DrawScaleDialog();
-            }
+            catch (Exception ex) { ModLog.Error("HackMenu.OnGUI", ex); }
         }
 
-        bool TryToggle()
+        private void OnDestroy()
         {
-            float now = Time.unscaledTime;
-            if (now - lastToggleTime < TOGGLE_COOLDOWN)
-                return false;
+            if (this.whiteTex)   Destroy(this.whiteTex);
+            if (this.bgTex)      Destroy(this.bgTex);
+            if (this.titleBgTex) Destroy(this.titleBgTex);
+            if (this.grayTex)    Destroy(this.grayTex);
+            if (this.checkTex)   Destroy(this.checkTex);
+        }
 
-            lastToggleTime = now;
-            ToggleMenu();
+        private bool TryToggle()
+        {
+            float t = Time.unscaledTime;
+            if (t - this.lastToggleTime < 0.15f) return false;
+            this.lastToggleTime = t;
+            this.ToggleMenu();
             return true;
         }
 
-        void ToggleMenu()
+        private void ToggleMenu()
         {
-            if (showMenu)
+            if (this.showMenu)
             {
-                if (hideCoverOnly)
-                {
-                    hideOverlayOnly = !hideOverlayOnly;
-                }
-                else
-                {
-                    showMenu = false;
-                    ShowMenu = false;
-                }
+                if (this.hideCoverOnly) this.hideOverlayOnly = !this.hideOverlayOnly;
+                else { this.showMenu = false; HackMenu.ShowMenu = false; }
             }
             else
             {
-                showMenu = true;
-                ShowMenu = true;
-                hideOverlayOnly = false;
+                this.showMenu = true; HackMenu.ShowMenu = true; this.hideOverlayOnly = false;
             }
-
-            if (showMenu)
-            {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
-            else
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-            }
+            Cursor.lockState = this.showMenu ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = this.showMenu;
         }
 
-        void ResetUI()
+        private void ResetUI()
         {
-            scalePercent = initialScalePercent;
-            RecalculateMenuPositions();
-
-            foreach (var title in initialMenuRects.Keys)
+            try
             {
-                menuRects[title] = initialMenuRects[title];
-                menuExpanded[title] = initialMenuExpanded[title];
-            }
-
-            englishMode = initialEnglishMode;
-            gradientEffect = initialGradientEffect;
-            hideCoverOnly = initialHideCoverOnly;
-            hideOverlayOnly = false;
-            showMenu = true;
-            ShowMenu = true;
-
-            lock (Lock)
-            {
-                ActiveFeatures.Clear();
-                ActiveFeatures.Add("功能列表");
-                ActiveFeatures.Add("水印");
-            }
-
-            featureStates.Clear();
-            featureStates["功能列表"] = true;
-            featureStates["水印"] = true;
-            featureStates["帧率显示"] = true;
-
-            fpsCurrent = 0f;
-            fpsMax = 0f;
-            fpsAvg = 0f;
-            fpsAccumTime = 0f;
-            fpsFrameCount = 0;
-
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-
-            lastStyleScale = -1f;
-        }
-
-        void InitStyles()
-        {
-            float scale = GetScale();
-
-            if (Mathf.Approximately(lastStyleScale, scale) && cachedTitleStyle != null)
-                return;
-
-            lastStyleScale = scale;
-
-            cachedTitleStyle = new GUIStyle(GUI.skin.label);
-            cachedTitleStyle.fontSize = (int)(34f * scale);
-            cachedTitleStyle.fontStyle = (FontStyle)1;
-            cachedTitleStyle.alignment = (TextAnchor)4;
-            cachedTitleStyle.normal.textColor = new Color(0f, 0.204f, 1f, 1f);
-
-            cachedButtonStyle = new GUIStyle(GUI.skin.button);
-            cachedButtonStyle.fontSize = (int)(30f * scale);
-            cachedButtonStyle.alignment = (TextAnchor)4;
-            cachedButtonStyle.normal.textColor = new Color(0f, 0.204f, 1f, 1f);
-            cachedButtonStyle.normal.background = null;
-            cachedButtonStyle.hover.textColor = new Color(0f, 0.204f, 1f, 1f);
-            cachedButtonStyle.hover.background = null;
-            cachedButtonStyle.active.textColor = new Color(0f, 0.204f, 1f, 1f);
-            cachedButtonStyle.active.background = null;
-            cachedButtonStyle.border = new RectOffset(0, 0, 0, 0);
-            cachedButtonStyle.padding = new RectOffset(0, 0, 0, 0);
-            cachedButtonStyle.margin = new RectOffset(0, 0, 0, 0);
-
-            cachedButtonActiveStyle = new GUIStyle(cachedButtonStyle);
-            cachedButtonActiveStyle.normal.textColor = Color.white;
-            cachedButtonActiveStyle.hover.textColor = Color.white;
-            cachedButtonActiveStyle.active.textColor = Color.white;
-
-            cachedListItemStyle = new GUIStyle(GUI.skin.label);
-            cachedListItemStyle.fontSize = (int)(36f * scale);
-            cachedListItemStyle.alignment = (TextAnchor)5;
-
-            cachedControlStyle = new GUIStyle(GUI.skin.label);
-            cachedControlStyle.fontSize = (int)(22f * scale);
-            cachedControlStyle.alignment = (TextAnchor)4;
-            cachedControlStyle.normal.textColor = Color.white;
-
-            cachedControlLabelStyle = new GUIStyle(GUI.skin.label);
-            cachedControlLabelStyle.fontSize = (int)(22f * scale);
-            cachedControlLabelStyle.alignment = (TextAnchor)3;
-            cachedControlLabelStyle.normal.textColor = Color.white;
-
-            cachedDialogStyle = new GUIStyle(GUI.skin.label);
-            cachedDialogStyle.fontSize = (int)(28f * scale);
-            cachedDialogStyle.alignment = (TextAnchor)4;
-            cachedDialogStyle.normal.textColor = Color.white;
-
-            cachedDialogButtonStyle = new GUIStyle(GUI.skin.button);
-            cachedDialogButtonStyle.fontSize = (int)(26f * scale);
-            cachedDialogButtonStyle.alignment = (TextAnchor)4;
-            cachedDialogButtonStyle.normal.textColor = Color.white;
-            cachedDialogButtonStyle.hover.textColor = Color.white;
-            cachedDialogButtonStyle.active.textColor = Color.white;
-        }
-
-        string GetDisplayText(string cnText)
-        {
-            if (!englishMode) return cnText;
-            for (int m = 0; m < MENUS.Length; m++)
-            {
-                for (int i = 0; i < MENUS[m].Length; i++)
+                this.scalePercent = this.initialScalePercent;
+                this.RecalculateMenuPositions();
+                foreach (var k in this.initialMenuRects.Keys)
                 {
-                    if (MENUS[m][i] == cnText)
-                        return MENUS_EN[m][i];
+                    this.menuRects[k]    = this.initialMenuRects[k];
+                    this.menuExpanded[k] = this.initialMenuExpanded[k];
                 }
-            }
-            return cnText;
-        }
+                this.englishMode     = this.initialEnglishMode;
+                this.gradientEffect  = this.initialGradientEffect;
+                this.hideCoverOnly   = this.initialHideCoverOnly;
+                this.hideOverlayOnly = false;
+                this.showMenu        = true;
+                HackMenu.ShowMenu    = true;
 
-        void HandleMenuInput(Event e)
-        {
-            float scale = GetScale();
-            float menuWidth = 300f * scale;
-            float titleHeight = 72f * scale;
-            float buttonHeight = 64f * scale;
-
-            foreach (var menu in MENUS)
-            {
-                string title = menu[0];
-                Rect rect = menuRects[title];
-                bool expanded = menuExpanded[title];
-
-                Rect titleRect = new Rect(rect.x, rect.y, menuWidth, titleHeight);
-
-                if (e.type == EventType.MouseDown && e.button == 0)
+                lock (Lock)
                 {
-                    if (titleRect.Contains(e.mousePosition))
-                    {
-                        isDragging[title] = true;
-                        dragOffset[title] = new Vector2(e.mousePosition.x - rect.x, e.mousePosition.y - rect.y);
-                        e.Use();
-                    }
+                    foreach (var menu in this.MENUS)
+                        for (int i = 1; i < menu.Length; i++)
+                            ActiveFeatures.Remove(menu[i]);
                 }
-
-                if (isDragging[title] && e.type == EventType.MouseDrag)
-                {
-                    rect.x = e.mousePosition.x - dragOffset[title].x;
-                    rect.y = e.mousePosition.y - dragOffset[title].y;
-                    menuRects[title] = rect;
-                    e.Use();
-                }
-
-                if (e.type == EventType.MouseUp && e.button == 0)
-                {
-                    if (isDragging[title])
-                    {
-                        Vector2 dragDist = new Vector2(e.mousePosition.x - (rect.x + dragOffset[title].x), e.mousePosition.y - (rect.y + dragOffset[title].y));
-                        if (dragDist.magnitude < 6f)
-                        {
-                            menuExpanded[title] = !expanded;
-                        }
-                        isDragging[title] = false;
-                        e.Use();
-                    }
-                }
-
-                if (expanded)
-                {
+                foreach (var menu in this.MENUS)
                     for (int i = 1; i < menu.Length; i++)
-                    {
-                        string feature = menu[i];
-                        bool isOn = featureStates.ContainsKey(feature) && featureStates[feature];
-                        Rect btnRect = new Rect(rect.x, rect.y + titleHeight + (i - 1) * buttonHeight, menuWidth, buttonHeight);
+                        this.featureStates[menu[i]] = false;
 
-                        if (e.type == EventType.MouseDown && e.button == 0 && btnRect.Contains(e.mousePosition))
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible   = true;
+                this.lastStyleScale = -1f;
+            }
+            catch (Exception ex) { ModLog.Error("HackMenu.ResetUI", ex); }
+        }
+
+        private void RecalculateMenuPositions()
+        {
+            try
+            {
+                float s = this.GetScale();
+                float w = 300f * s, h = 72f * s;
+                float pad  = 40f * s;
+                float gapX = 20f * s;
+                float gapY = 20f * s;
+
+                float x = pad;
+                float y = pad;
+
+                foreach (var menu in this.MENUS)
+                {
+                    string key = menu[0];
+
+                    if (x + w > Screen.width - pad && x > pad)
+                    {
+                        x = pad;
+                        y += h + gapY;
+                    }
+
+                    var r = this.ClampRectToScreen(new Rect(x, y, w, h));
+                    this.menuRects[key]    = r;
+                    this.menuExpanded[key] = false;
+                    this.isDragging[key]   = false;
+
+                    x += w + gapX;
+
+                    if (!this.initialMenuRects.ContainsKey(key))
+                    {
+                        this.initialMenuRects[key]    = r;
+                        this.initialMenuExpanded[key] = false;
+                    }
+                }
+            }
+            catch (Exception ex) { ModLog.Error("HackMenu.RecalculateMenuPositions", ex); }
+        }
+
+        private Rect ClampRectToScreen(Rect rect)
+        {
+            float s = this.GetScale();
+            float w = 300f * s, h = 72f * s;
+            float maxX = Mathf.Max(0f, Screen.width  - w);
+            float maxY = Mathf.Max(0f, Screen.height - h);
+            rect.x = Mathf.Clamp(rect.x, 0f, maxX);
+            rect.y = Mathf.Clamp(rect.y, 0f, maxY);
+            rect.width  = w;
+            rect.height = h;
+            return rect;
+        }
+
+        private void GetBottomRightRects(out Rect y0, out Rect y1, out Rect y2, out Rect y3, out Rect y4)
+        {
+            float s = this.GetScale();
+            float w = 280f * s, h = 32f * s, gap = 4f * s, pad = 20f * s;
+
+            float maxW = Screen.width - 2f * pad;
+            if (maxW > 40f && w > maxW) w = maxW;
+
+            float totalH = 5f * h + 4f * gap;
+            float maxH   = Screen.height - 2f * pad;
+            if (maxH > 40f && totalH > maxH)
+            {
+                float k = maxH / totalH;
+                h   *= k;
+                gap *= k;
+            }
+
+            float x   = Screen.width - pad - w;
+            if (x < pad) x = pad;
+            float top = Screen.height - pad - h;
+            if (top < pad) top = pad;
+
+            y0 = new Rect(x, top, w, h);
+            y1 = new Rect(x, top - (h + gap), w, h);
+            y2 = new Rect(x, top - 2f * (h + gap), w, h);
+            y3 = new Rect(x, top - 3f * (h + gap), w, h);
+            y4 = new Rect(x, top - 4f * (h + gap), w, h);
+        }
+
+        private void InitStyles()
+        {
+            float s = this.GetScale();
+            if (Mathf.Approximately(this.lastStyleScale, s) && this.cachedTitleStyle != null) return;
+            this.lastStyleScale = s;
+
+            this.cachedTitleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize  = (int)(34f * s),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+            };
+            this.cachedTitleStyle.normal.textColor = new Color(0f, 0.204f, 1f);
+
+            this.cachedButtonStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize  = (int)(30f * s),
+                alignment = TextAnchor.MiddleCenter,
+                border    = new RectOffset(0, 0, 0, 0),
+                padding   = new RectOffset(0, 0, 0, 0),
+                margin    = new RectOffset(0, 0, 0, 0),
+            };
+            this.cachedButtonStyle.normal.background = null;
+            this.cachedButtonStyle.normal.textColor  = new Color(0f, 0.204f, 1f);
+            this.cachedButtonStyle.hover.background  = null;
+            this.cachedButtonStyle.hover.textColor   = new Color(0f, 0.204f, 1f);
+            this.cachedButtonStyle.active.background = null;
+            this.cachedButtonStyle.active.textColor  = new Color(0f, 0.204f, 1f);
+
+            this.cachedButtonActiveStyle = new GUIStyle(this.cachedButtonStyle);
+            this.cachedButtonActiveStyle.normal.textColor = Color.white;
+            this.cachedButtonActiveStyle.hover.textColor  = Color.white;
+            this.cachedButtonActiveStyle.active.textColor = Color.white;
+
+            this.cachedControlStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize  = (int)(22f * s),
+                alignment = TextAnchor.MiddleCenter,
+            };
+            this.cachedControlStyle.normal.textColor = Color.white;
+
+            this.cachedControlLabelStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize  = (int)(22f * s),
+                alignment = TextAnchor.MiddleLeft,
+            };
+            this.cachedControlLabelStyle.normal.textColor = Color.white;
+
+            this.cachedDialogStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize  = (int)(28f * s),
+                alignment = TextAnchor.MiddleCenter,
+            };
+            this.cachedDialogStyle.normal.textColor = Color.white;
+
+            this.cachedDialogButtonStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize  = (int)(26f * s),
+                alignment = TextAnchor.MiddleCenter,
+            };
+            this.cachedDialogButtonStyle.normal.textColor = Color.white;
+            this.cachedDialogButtonStyle.hover.textColor  = Color.white;
+            this.cachedDialogButtonStyle.active.textColor = Color.white;
+        }
+
+        private string GetDisplayText(string cnText)
+        {
+            if (!this.englishMode) return cnText;
+            string en;
+            return this.enMap.TryGetValue(cnText, out en) ? en : cnText;
+        }
+
+        private bool IsItemMenu(string key) => key == ItemMenuKey;
+
+        private int GetItemCount()
+        {
+            var names = ItemPickerPlugin.GetItemNames();
+            if (names == null || names.Length <= 1) return 1;
+            return names.Length - 1;
+        }
+
+        private void HandleInput(Event e)
+        {
+            try
+            {
+                this.InitStyles();
+                float s = this.GetScale();
+                float w = 300f * s, h = 72f * s, itemH = 64f * s;
+
+                for (int mi = this.MENUS.Length - 1; mi >= 0; mi--)
+                {
+                    if (e.type == EventType.Used) break;
+
+                    var menu      = this.MENUS[mi];
+                    string key    = menu[0];
+                    var rect      = this.menuRects[key];
+                    bool expanded = this.menuExpanded[key];
+
+                    var titleRect = new Rect(rect.x, rect.y, w, h);
+                    if (e.type == EventType.MouseDown && e.button == 0 && titleRect.Contains(e.mousePosition))
+                    {
+                        this.isDragging[key] = true;
+                        this.dragOffset[key] = new Vector2(e.mousePosition.x - rect.x, e.mousePosition.y - rect.y);
+                        e.Use();
+                    }
+                    if (this.isDragging[key] && e.type == EventType.MouseDrag)
+                    {
+                        rect.x = e.mousePosition.x - this.dragOffset[key].x;
+                        rect.y = e.mousePosition.y - this.dragOffset[key].y;
+                        rect = this.ClampRectToScreen(rect);
+                        this.menuRects[key] = rect;
+                        e.Use();
+                    }
+                    if (e.type == EventType.MouseUp && e.button == 0 && this.isDragging[key])
+                    {
+                        var d = new Vector2(
+                            e.mousePosition.x - (rect.x + this.dragOffset[key].x),
+                            e.mousePosition.y - (rect.y + this.dragOffset[key].y));
+                        if (d.magnitude < 6f) this.menuExpanded[key] = !expanded;
+                        this.isDragging[key] = false;
+                        e.Use();
+                    }
+
+                    if (!expanded) continue;
+
+                    if (this.IsItemMenu(key))
+                    {
+                        var names = ItemPickerPlugin.GetItemNames();
+                        if (names != null && names.Length > 1)
                         {
-                            featureStates[feature] = !isOn;
-                            lock (Lock)
+                            for (int j = 1; j < names.Length; j++)
                             {
-                                if (featureStates[feature])
+                                var r = new Rect(rect.x, rect.y + h + (j - 1) * itemH, w, itemH);
+                                if (e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
                                 {
-                                    if (!ActiveFeatures.Contains(feature))
-                                        ActiveFeatures.Add(feature);
-                                }
-                                else
-                                {
-                                    ActiveFeatures.Remove(feature);
+                                    ItemPickerPlugin.TriggerCollectItem(j);
+                                    e.Use();
+                                    break;
                                 }
                             }
+                        }
+                        continue;
+                    }
+
+                    for (int j = 1; j < menu.Length; j++)
+                    {
+                        string text = menu[j];
+                        var r = new Rect(rect.x, rect.y + h + (j - 1) * itemH, w, itemH);
+                        if (e.type == EventType.MouseDown && e.button == 0 && r.Contains(e.mousePosition))
+                        {
+                            bool on = !this.featureStates[text];
+                            this.featureStates[text] = on;
+                            lock (Lock)
+                            {
+                                if (on) ActiveFeatures.Add(text);
+                                else    ActiveFeatures.Remove(text);
+                            }
                             e.Use();
+                            break;
                         }
                     }
                 }
             }
+            catch (Exception ex) { ModLog.Error("HackMenu.HandleInput", ex); }
         }
 
-        void DrawMenusRepaint()
+        private void DrawMenus()
         {
-            InitStyles();
-
-            float scale = GetScale();
-            float menuWidth = 300f * scale;
-            float titleHeight = 72f * scale;
-            float buttonHeight = 64f * scale;
-
-            int globalIndex = 0;
-            int totalItems = 0;
-
-            foreach (var menu in MENUS)
+            try
             {
-                if (menuExpanded[menu[0]])
+                this.InitStyles();
+                float s = this.GetScale();
+                float w = 300f * s, h = 72f * s, itemH = 64f * s;
+
+                int activeCount = 0, totalActive = 0;
+                foreach (var m in this.MENUS)
+                    if (this.menuExpanded[m[0]]) totalActive += m.Length - 1;
+
+                foreach (var menu in this.MENUS)
                 {
-                    totalItems += menu.Length - 1;
-                }
-            }
+                    string title   = menu[0];
+                    var rect       = this.menuRects[title];
+                    bool expanded  = this.menuExpanded[title];
 
-            foreach (var menu in MENUS)
-            {
-                string title = menu[0];
-                Rect rect = menuRects[title];
-                bool expanded = menuExpanded[title];
+                    float bgH;
+                    if (this.IsItemMenu(title))
+                        bgH = h + (expanded ? this.GetItemCount() * itemH : 0f);
+                    else
+                        bgH = h + (expanded ? (menu.Length - 1) * itemH : 0f);
 
-                float totalHeight = titleHeight;
-                if (expanded)
-                    totalHeight += (menu.Length - 1) * buttonHeight;
+                    GUI.DrawTexture(new Rect(rect.x, rect.y, w, bgH), this.bgTex);
+                    var titleRect = new Rect(rect.x, rect.y, w, h);
+                    GUI.DrawTexture(titleRect, this.titleBgTex);
+                    GUI.Label(titleRect, this.GetDisplayText(title), this.cachedTitleStyle);
 
-                Rect fullRect = new Rect(rect.x, rect.y, menuWidth, totalHeight);
-                GUI.DrawTexture(fullRect, bgTex);
+                    if (!expanded) continue;
 
-                Rect titleRect = new Rect(rect.x, rect.y, menuWidth, titleHeight);
-                GUI.DrawTexture(titleRect, titleBgTex);
-                GUI.Label(titleRect, GetDisplayText(title), cachedTitleStyle);
-
-                if (expanded)
-                {
-                    for (int i = 1; i < menu.Length; i++)
+                    if (this.IsItemMenu(title))
                     {
-                        string feature = menu[i];
-                        bool isOn = featureStates.ContainsKey(feature) && featureStates[feature];
-                        Rect btnRect = new Rect(rect.x, rect.y + titleHeight + (i - 1) * buttonHeight, menuWidth, buttonHeight);
+                        this.DrawItemMenu(rect, w, h, itemH);
+                        continue;
+                    }
 
-                        if (isOn)
+                    for (int j = 1; j < menu.Length; j++)
+                    {
+                        string text = menu[j];
+                        bool active;
+                        this.featureStates.TryGetValue(text, out active);
+                        var r = new Rect(rect.x, rect.y + h + (j - 1) * itemH, w, itemH);
+
+                        if (active)
                         {
-                            float progress = totalItems > 0 ? (float)globalIndex / totalItems : 0f;
-                            float hueOffset = -progress * 222f;
-                            Color bgColor = gradientEffect ? GetRainbowColor(hue + hueOffset) : Color.blue;
-                            GUI.color = bgColor;
-                            GUI.DrawTexture(btnRect, whiteTex);
+                            float t = totalActive > 0 ? (float)activeCount / totalActive : 0f;
+                            GUI.color = this.gradientEffect
+                                ? this.GetRainbowColor(this.hue - t * 222f)
+                                : Color.blue;
+                            GUI.DrawTexture(r, this.whiteTex);
                             GUI.color = Color.white;
-                            GUI.Label(btnRect, GetDisplayText(feature), cachedButtonActiveStyle);
+                            GUI.Label(r, this.GetDisplayText(text), this.cachedButtonActiveStyle);
                         }
                         else
                         {
                             GUI.color = Color.white;
-                            cachedButtonStyle.normal.textColor = new Color(0f, 0.204f, 1f, 1f);
-                            cachedButtonStyle.hover.textColor = new Color(0f, 0.204f, 1f, 1f);
-                            cachedButtonStyle.active.textColor = new Color(0f, 0.204f, 1f, 1f);
-                            GUI.Label(btnRect, GetDisplayText(feature), cachedButtonStyle);
+                            GUI.Label(r, this.GetDisplayText(text), this.cachedButtonStyle);
                         }
-
-                        globalIndex++;
+                        activeCount++;
                     }
                 }
+                GUI.color = Color.white;
             }
-
-            GUI.color = Color.white;
+            catch (Exception ex) { ModLog.Error("HackMenu.DrawMenus", ex); }
         }
 
-        private void DrawOverlayText()
+        private void DrawItemMenu(Rect rect, float w, float h, float itemH)
         {
-            string[] lines = englishMode ? OVERLAY_TEXT_EN : OVERLAY_TEXT_CN;
-            if (lines == null || lines.Length == 0) return;
+            var names = ItemPickerPlugin.GetItemNames();
 
-            float scale = GetScale();
-            float fontSize = 45f * scale; 
-            float lineHeight = 63f * scale; 
-            float blockWidth = Screen.width * 0.6f;
-            float blockX = (Screen.width - blockWidth) * 0.5f;
-            float blockHeight = lineHeight * lines.Length;
-            float startY = (Screen.height - blockHeight) * 0.5f;
-
-            GUIStyle overlayTextStyle = new GUIStyle(GUI.skin.label);
-            overlayTextStyle.fontSize = Mathf.Max(1, (int)fontSize);
-            overlayTextStyle.alignment = TextAnchor.MiddleLeft;
-            overlayTextStyle.wordWrap = true;
-            overlayTextStyle.normal.textColor = Color.white;
-
-            for (int i = 0; i < lines.Length; i++)
+            if (names == null || names.Length <= 1)
             {
-                if (string.IsNullOrEmpty(lines[i])) continue;
+                GUI.color = Color.white;
+                GUI.Label(
+                    new Rect(rect.x, rect.y + h, w, itemH),
+                    this.englishMode ? "  (not in game)" : "  （未在游戏中）",
+                    this.cachedButtonStyle);
+                return;
+            }
 
-                Rect lineRect = new Rect(blockX, startY + i * lineHeight, blockWidth, lineHeight);
-                GUI.Label(lineRect, lines[i], overlayTextStyle);
+            for (int j = 1; j < names.Length; j++)
+            {
+                var r = new Rect(rect.x, rect.y + h + (j - 1) * itemH, w, itemH);
+                GUI.color = Color.white;
+                GUI.Label(r, "  " + names[j], this.cachedButtonStyle);
             }
         }
 
-        void DrawBottomRightControls()
+        private void DrawBottomRightControls()
         {
-            InitStyles();
-
-            float scale = GetScale();
-            float ctrlWidth = CTRL_WIDTH * scale;
-            float ctrlHeight = CTRL_HEIGHT * scale;
-            float ctrlGap = CTRL_GAP * scale;
-            float ctrlPad = CTRL_PAD * scale;
-
-            float x = Screen.width - ctrlPad - ctrlWidth;
-
-            float yEnglish = Screen.height - ctrlPad - ctrlHeight;
-            float yHideCover = yEnglish - ctrlHeight - ctrlGap;
-            float yGradient = yHideCover - ctrlHeight - ctrlGap;
-            float yScale = yGradient - ctrlHeight - ctrlGap;
-            float yReset = yScale - ctrlHeight - ctrlGap;
-            float yGitHub = yReset - ctrlHeight - ctrlGap;
-
-            float boxSize = CHECKBOX_SIZE * scale;
-
-            Rect englishRect = new Rect(x, yEnglish, ctrlWidth, ctrlHeight);
-            GUI.DrawTexture(englishRect, bgTex);
-
-            float cx = x + 12f * scale;
-            float cy = yEnglish + (ctrlHeight - boxSize) * 0.5f;
-            Rect boxRect = new Rect(cx, cy, boxSize, boxSize);
-            GUI.DrawTexture(boxRect, whiteTex);
-            if (englishMode)
+            try
             {
-                float inner = 4f * scale;
-                GUI.DrawTexture(new Rect(boxRect.x + inner, boxRect.y + inner, boxSize - inner * 2f, boxSize - inner * 2f), checkTex);
+                this.InitStyles();
+                float s   = this.GetScale();
+                float box = 24f * s;
+                float lblOff = box + 10f * s;
+
+                Rect y0, y1, y2, y3, y4;
+                this.GetBottomRightRects(out y0, out y1, out y2, out y3, out y4);
+
+                float lblW = y0.width - box - 30f * s;
+
+                this.DrawCheckboxAt(y0, box, lblOff, lblW, "English Mode",    this.englishMode);
+                this.DrawCheckboxAt(y1, box, lblOff, lblW, "Hide Cover Only", this.hideCoverOnly);
+                this.DrawCheckboxAt(y2, box, lblOff, lblW, "Gradient Effect", this.gradientEffect);
+
+                GUI.DrawTexture(y3, this.bgTex);
+                GUI.Label(y3, "Scale: " + Mathf.RoundToInt(this.scalePercent) + "%", this.cachedControlStyle);
+
+                GUI.DrawTexture(y4, this.bgTex);
+                GUI.Label(y4, "Reset", this.cachedControlStyle);
             }
-
-            float labelX = cx + boxSize + 10f * scale;
-            float labelW = ctrlWidth - boxSize - 30f * scale;
-            GUI.Label(new Rect(labelX, yEnglish, labelW, ctrlHeight), "English Mode", cachedControlLabelStyle);
-
-            Rect hideCoverRect = new Rect(x, yHideCover, ctrlWidth, ctrlHeight);
-            GUI.DrawTexture(hideCoverRect, bgTex);
-
-            cx = x + 12f * scale;
-            cy = yHideCover + (ctrlHeight - boxSize) * 0.5f;
-            boxRect = new Rect(cx, cy, boxSize, boxSize);
-            GUI.DrawTexture(boxRect, whiteTex);
-            if (hideCoverOnly)
-            {
-                float inner = 4f * scale;
-                GUI.DrawTexture(new Rect(boxRect.x + inner, boxRect.y + inner, boxSize - inner * 2f, boxSize - inner * 2f), checkTex);
-            }
-
-            labelX = cx + boxSize + 10f * scale;
-            GUI.Label(new Rect(labelX, yHideCover, labelW, ctrlHeight), "Hide Cover Only", cachedControlLabelStyle);
-
-            Rect gradientRect = new Rect(x, yGradient, ctrlWidth, ctrlHeight);
-            GUI.DrawTexture(gradientRect, bgTex);
-
-            cx = x + 12f * scale;
-            cy = yGradient + (ctrlHeight - boxSize) * 0.5f;
-            boxRect = new Rect(cx, cy, boxSize, boxSize);
-            GUI.DrawTexture(boxRect, whiteTex);
-            if (gradientEffect)
-            {
-                float inner = 4f * scale;
-                GUI.DrawTexture(new Rect(boxRect.x + inner, boxRect.y + inner, boxSize - inner * 2f, boxSize - inner * 2f), checkTex);
-            }
-
-            labelX = cx + boxSize + 10f * scale;
-            GUI.Label(new Rect(labelX, yGradient, labelW, ctrlHeight), "Gradient Effect", cachedControlLabelStyle);
-
-            Rect scaleRect = new Rect(x, yScale, ctrlWidth, ctrlHeight);
-            GUI.DrawTexture(scaleRect, bgTex);
-            GUI.Label(scaleRect, "Scale: " + Mathf.RoundToInt(scalePercent) + "%", cachedControlStyle);
-
-            Rect resetRect = new Rect(x, yReset, ctrlWidth, ctrlHeight);
-            GUI.DrawTexture(resetRect, bgTex);
-            GUI.Label(resetRect, "Reset", cachedControlStyle);
-
-            Rect gitHubRect = new Rect(x, yGitHub, ctrlWidth, ctrlHeight);
-            GUI.DrawTexture(gitHubRect, bgTex);
-            GUI.Label(gitHubRect, "GitHub", cachedControlStyle);
+            catch (Exception ex) { ModLog.Error("HackMenu.DrawBottomRightControls", ex); }
         }
 
-        void HandleBottomRightInput(Event e)
+        private void DrawCheckboxAt(Rect rect, float box, float lblOff, float lblW, string label, bool on)
         {
-            if (e.type != EventType.MouseDown || e.button != 0) return;
+            float s = this.GetScale();
+            GUI.DrawTexture(rect, this.bgTex);
 
-            float scale = GetScale();
-            float ctrlWidth = CTRL_WIDTH * scale;
-            float ctrlHeight = CTRL_HEIGHT * scale;
-            float ctrlGap = CTRL_GAP * scale;
-            float ctrlPad = CTRL_PAD * scale;
+            var cb = new Rect(rect.x + 12f * s, rect.y + (rect.height - box) * 0.5f, box, box);
+            GUI.DrawTexture(cb, this.whiteTex);
+            if (on)
+                GUI.DrawTexture(new Rect(cb.x + 4f * s, cb.y + 4f * s, box - 8f * s, box - 8f * s), this.checkTex);
 
-            float x = Screen.width - ctrlPad - ctrlWidth;
-
-            float yEnglish = Screen.height - ctrlPad - ctrlHeight;
-            float yHideCover = yEnglish - ctrlHeight - ctrlGap;
-            float yGradient = yHideCover - ctrlHeight - ctrlGap;
-            float yScale = yGradient - ctrlHeight - ctrlGap;
-            float yReset = yScale - ctrlHeight - ctrlGap;
-            float yGitHub = yReset - ctrlHeight - ctrlGap;
-
-            Rect gitHubRect = new Rect(x, yGitHub, ctrlWidth, ctrlHeight);
-            if (gitHubRect.Contains(e.mousePosition))
-            {
-                Application.OpenURL("https://github.com/ChenQingMua/BaldisBasicsClassicModsHack-Plugin");
-                e.Use();
-                return;
-            }
-
-            Rect resetRect = new Rect(x, yReset, ctrlWidth, ctrlHeight);
-            if (resetRect.Contains(e.mousePosition))
-            {
-                ResetUI();
-                e.Use();
-                return;
-            }
-
-            Rect scaleRect = new Rect(x, yScale, ctrlWidth, ctrlHeight);
-            if (scaleRect.Contains(e.mousePosition))
-            {
-                showScaleDialog = true;
-                scaleInput = Mathf.RoundToInt(scalePercent).ToString();
-                e.Use();
-                return;
-            }
-
-            Rect gradientRect = new Rect(x, yGradient, ctrlWidth, ctrlHeight);
-            if (gradientRect.Contains(e.mousePosition))
-            {
-                gradientEffect = !gradientEffect;
-                e.Use();
-                return;
-            }
-
-            Rect hideCoverRect = new Rect(x, yHideCover, ctrlWidth, ctrlHeight);
-            if (hideCoverRect.Contains(e.mousePosition))
-            {
-                hideCoverOnly = !hideCoverOnly;
-                e.Use();
-                return;
-            }
-
-            Rect englishRect = new Rect(x, yEnglish, ctrlWidth, ctrlHeight);
-            if (englishRect.Contains(e.mousePosition))
-            {
-                englishMode = !englishMode;
-                e.Use();
-            }
+            GUI.Label(new Rect(rect.x + lblOff, rect.y, lblW, rect.height), label, this.cachedControlLabelStyle);
         }
 
-        void DrawScaleDialog()
+        private void HandleBottomRightInput(Event e)
         {
-            InitStyles();
-
-            float scale = GetScale();
-            float dialogWidth = 380f * scale;
-            float dialogHeight = 170f * scale;
-            float dialogX = (Screen.width - dialogWidth) / 2f;
-            float dialogY = (Screen.height - dialogHeight) / 2f;
-
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), grayTex);
-
-            Color oldColor = GUI.color;
-            GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(dialogX, dialogY, dialogWidth, dialogHeight), whiteTex);
-            GUI.color = oldColor;
-
-            GUI.color = new Color(0.75f, 0.75f, 0.75f, 1f);
-            GUI.DrawTexture(new Rect(dialogX, dialogY, dialogWidth, 1f), whiteTex);
-            GUI.DrawTexture(new Rect(dialogX, dialogY + dialogHeight - 1f, dialogWidth, 1f), whiteTex);
-            GUI.DrawTexture(new Rect(dialogX, dialogY, 1f, dialogHeight), whiteTex);
-            GUI.DrawTexture(new Rect(dialogX + dialogWidth - 1f, dialogY, 1f, dialogHeight), whiteTex);
-            GUI.color = oldColor;
-
-            GUI.color = new Color(0.12f, 0.12f, 0.12f, 1f);
-            GUI.DrawTexture(new Rect(dialogX, dialogY, dialogWidth, 36f * scale), whiteTex);
-            GUI.color = oldColor;
-
-            GUIStyle titleStyle2 = new GUIStyle(cachedDialogStyle);
-            titleStyle2.normal.textColor = Color.white;
-            titleStyle2.fontStyle = FontStyle.Bold;
-            titleStyle2.fontSize = (int)(20f * scale);
-            titleStyle2.alignment = TextAnchor.MiddleLeft;
-            GUI.Label(new Rect(dialogX + 12f * scale, dialogY, dialogWidth - 60f * scale, 36f * scale), "Scale Setting", titleStyle2);
-
-
-
-            float contentY = dialogY + 50f * scale;
-
-            GUIStyle labelStyle2 = new GUIStyle(cachedDialogStyle);
-            labelStyle2.normal.textColor = new Color(0.05f, 0.05f, 0.05f, 1f);
-            labelStyle2.fontSize = (int)(16f * scale);
-            labelStyle2.alignment = TextAnchor.MiddleLeft;
-            GUI.Label(new Rect(dialogX + 10f * scale, contentY, 100f * scale, 32f * scale), "Scale:", labelStyle2);
-
-            float inputWidth = 280f * scale;
-            float inputX = dialogX + 60f * scale;
-            float inputY = contentY;
-            float inputHeight = 32f * scale;
-
-            GUI.color = new Color(0.6f, 0.6f, 0.6f, 1f);
-            GUI.DrawTexture(new Rect(inputX, inputY, inputWidth + 2f * scale, inputHeight + 2f * scale), whiteTex);
-            GUI.color = new Color(0.95f, 0.95f, 0.95f, 1f);
-            GUI.DrawTexture(new Rect(inputX + 1f * scale, inputY + 1f * scale, inputWidth, inputHeight - 2f * scale), whiteTex);
-            GUI.color = oldColor;
-
-            GUI.SetNextControlName("ScaleInput");
-            scaleInput = GUI.TextField(new Rect(inputX + 4f * scale, inputY + 2f * scale, inputWidth - 8f * scale, inputHeight - 4f * scale), scaleInput, 20);
-
-            labelStyle2.fontSize = (int)(16f * scale);
-            labelStyle2.alignment = TextAnchor.MiddleLeft;
-            GUI.Label(new Rect(inputX + inputWidth + 8f * scale, inputY, 30f * scale, inputHeight), "%", labelStyle2);
-
-            float btnWidth = 120f * scale;
-            float btnHeight = 30f * scale;
-            float btnY = dialogY + dialogHeight - btnHeight - 16f * scale;
-
-            Rect confirmRect = new Rect(dialogX + dialogWidth - btnWidth * 2 - 12f * scale, btnY, btnWidth, btnHeight);
-            GUI.color = new Color(0.1f, 0.1f, 0.1f, 1f);
-            GUI.DrawTexture(confirmRect, whiteTex);
-            GUI.color = oldColor;
-            if (GUI.Button(confirmRect, "OK", cachedDialogButtonStyle))
+            try
             {
-                int newValue;
-                if (int.TryParse(scaleInput, out newValue))
+                if (e.type != EventType.MouseDown || e.button != 0) return;
+
+                Rect y0, y1, y2, y3, y4;
+                this.GetBottomRightRects(out y0, out y1, out y2, out y3, out y4);
+
+                if (y4.Contains(e.mousePosition)) { this.ResetUI(); e.Use(); return; }
+                if (y3.Contains(e.mousePosition))
                 {
-                    scalePercent = Mathf.Clamp(newValue, 0f, 100f);
-                    RecalculateMenuPositions();
-                    showScaleDialog = false;
+                    this.showScaleDialog = true;
+                    this.scaleInput = Mathf.RoundToInt(this.scalePercent).ToString();
+                    e.Use(); return;
+                }
+                if (y2.Contains(e.mousePosition)) { this.gradientEffect = !this.gradientEffect; e.Use(); return; }
+                if (y1.Contains(e.mousePosition)) { this.hideCoverOnly  = !this.hideCoverOnly;  e.Use(); return; }
+                if (y0.Contains(e.mousePosition)) { this.englishMode     = !this.englishMode;     e.Use(); }
+            }
+            catch (Exception ex) { ModLog.Error("HackMenu.HandleBottomRightInput", ex); }
+        }
+
+        private void DrawScaleDialog()
+        {
+            try
+            {
+                this.InitStyles();
+                float s = this.GetScale();
+                float w = 380f * s, h = 170f * s;
+                float x = (Screen.width  - w) / 2f;
+                float y = (Screen.height - h) / 2f;
+
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), this.grayTex);
+
+                var savedColor = GUI.color;
+                GUI.color = Color.white;
+                GUI.DrawTexture(new Rect(x, y, w, h), this.whiteTex);
+
+                GUI.color = new Color(0.75f, 0.75f, 0.75f, 1f);
+                GUI.DrawTexture(new Rect(x,          y,          w, 1f), this.whiteTex);
+                GUI.DrawTexture(new Rect(x,          y + h - 1f, w, 1f), this.whiteTex);
+                GUI.DrawTexture(new Rect(x,          y,          1f, h), this.whiteTex);
+                GUI.DrawTexture(new Rect(x + w - 1f, y,          1f, h), this.whiteTex);
+
+                GUI.color = new Color(0.12f, 0.12f, 0.12f, 1f);
+                GUI.DrawTexture(new Rect(x, y, w, 36f * s), this.whiteTex);
+                GUI.color = savedColor;
+
+                var headerStyle = new GUIStyle(this.cachedDialogStyle)
+                {
+                    fontSize  = (int)(20f * s),
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleLeft,
+                };
+                headerStyle.normal.textColor = Color.white;
+                GUI.Label(new Rect(x + 12f * s, y, w - 60f * s, 36f * s), "Scale Setting", headerStyle);
+
+                float rowY = y + 50f * s;
+                var lblStyle = new GUIStyle(this.cachedDialogStyle)
+                {
+                    fontSize  = (int)(16f * s),
+                    alignment = TextAnchor.MiddleLeft,
+                };
+                lblStyle.normal.textColor = new Color(0.05f, 0.05f, 0.05f);
+                GUI.Label(new Rect(x + 10f * s, rowY, 100f * s, 32f * s), "Scale:", lblStyle);
+
+                float inW = 280f * s, inX = x + 60f * s, inH = 32f * s;
+                GUI.color = new Color(0.6f, 0.6f, 0.6f, 1f);
+                GUI.DrawTexture(new Rect(inX, rowY, inW + 2f * s, inH + 2f * s), this.whiteTex);
+                GUI.color = new Color(0.95f, 0.95f, 0.95f, 1f);
+                GUI.DrawTexture(new Rect(inX + 1f * s, rowY + 1f * s, inW, inH - 2f * s), this.whiteTex);
+                GUI.color = savedColor;
+
+                GUI.SetNextControlName("ScaleInput");
+                this.scaleInput = GUI.TextField(new Rect(inX + 4f * s, rowY + 2f * s, inW - 8f * s, inH - 4f * s), this.scaleInput, 20);
+                GUI.Label(new Rect(inX + inW + 8f * s, rowY, 30f * s, inH), "%", lblStyle);
+
+                float btnW = 120f * s, btnH = 30f * s;
+                float btnY = y + h - btnH - 16f * s;
+
+                var okRect = new Rect(x + w - btnW * 2f - 12f * s, btnY, btnW, btnH);
+                GUI.color = new Color(0.1f, 0.1f, 0.1f, 1f);
+                GUI.DrawTexture(okRect, this.whiteTex);
+                GUI.color = savedColor;
+                if (GUI.Button(okRect, "OK", this.cachedDialogButtonStyle))
+                    this.ApplyScaleInput(true);
+
+                var cancelRect = new Rect(x + w - btnW - 6f * s, btnY, btnW, btnH);
+                GUI.color = new Color(0.1f, 0.1f, 0.1f, 1f);
+                GUI.DrawTexture(cancelRect, this.whiteTex);
+                GUI.color = savedColor;
+                if (GUI.Button(cancelRect, "Cancel", this.cachedDialogButtonStyle))
+                {
+                    this.showScaleDialog = false;
                     GUI.FocusControl(null);
-                    lastStyleScale = -1f;
                 }
-                else
+
+                var ev = Event.current;
+                if (ev.type == EventType.MouseDown && !new Rect(x, y, w, h).Contains(ev.mousePosition))
                 {
-                    scaleInput = Mathf.RoundToInt(scalePercent).ToString();
-                }
-            }
-
-            Rect cancelRect = new Rect(dialogX + dialogWidth - btnWidth - 6f * scale, btnY, btnWidth, btnHeight);
-            GUI.color = new Color(0.1f, 0.1f, 0.1f, 1f);
-            GUI.DrawTexture(cancelRect, whiteTex);
-            GUI.color = oldColor;
-            if (GUI.Button(cancelRect, "Cancel", cachedDialogButtonStyle))
-            {
-                showScaleDialog = false;
-                GUI.FocusControl(null);
-            }
-
-            if (Event.current.type == EventType.MouseDown && !new Rect(dialogX, dialogY, dialogWidth, dialogHeight).Contains(Event.current.mousePosition))
-            {
-                showScaleDialog = false;
-                GUI.FocusControl(null);
-                Event.current.Use();
-            }
-
-            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return)
-            {
-                int newValue;
-                if (int.TryParse(scaleInput, out newValue))
-                {
-                    scalePercent = Mathf.Clamp(newValue, 0f, 100f);
-                    RecalculateMenuPositions();
-                    showScaleDialog = false;
+                    this.showScaleDialog = false;
                     GUI.FocusControl(null);
-                    lastStyleScale = -1f;
-                    Event.current.Use();
+                    ev.Use();
                 }
+                if (ev.type == EventType.KeyDown && ev.keyCode == KeyCode.Return)
+                {
+                    this.ApplyScaleInput(false);
+                    ev.Use();
+                }
+                if (ev.type == EventType.Repaint && GUI.GetNameOfFocusedControl() != "ScaleInput")
+                    GUI.FocusControl("ScaleInput");
             }
-
-            if (Event.current.type == EventType.Repaint && GUI.GetNameOfFocusedControl() != "ScaleInput")
-            {
-                GUI.FocusControl("ScaleInput");
-            }
-        }
-        void DrawFPSDisplay()
-        {
-            bool show;
-            lock (Lock)
-            {
-                show = ActiveFeatures.Contains("帧率显示");
-            }
-            if (!show) return;
-
-            InitStyles();
-
-            float scale = GetScale();
-            float x = Screen.width / 2f;
-            float y = Screen.height - 20f * scale;
-
-            Color c1 = gradientEffect ? GetRainbowColor((hue - 80f + 720f) % 360f) : Color.white;
-            Color c2 = gradientEffect ? GetRainbowColor((hue - 40f + 720f) % 360f) : Color.white;
-            Color c3 = gradientEffect ? GetRainbowColor(hue) : Color.white;
-
-            GUIStyle baseStyle = new GUIStyle(GUI.skin.label);
-            baseStyle.fontSize = (int)(36f * scale);
-            baseStyle.alignment = (TextAnchor)4;
-
-            GUIStyle sCur = new GUIStyle(baseStyle);
-            sCur.normal.textColor = c1;
-            string curStr = string.Format(" {0:F0} FPS ", fpsCurrent);
-            Vector2 szCur = sCur.CalcSize(new GUIContent(curStr));
-
-            GUIStyle sMax = new GUIStyle(baseStyle);
-            sMax.normal.textColor = c2;
-            string maxStr = string.Format(" MAX: {0:F0} ", fpsMax);
-            Vector2 szMax = sMax.CalcSize(new GUIContent(maxStr));
-
-            GUIStyle sAvg = new GUIStyle(baseStyle);
-            sAvg.normal.textColor = c3;
-            string avgStr = string.Format(" AVERAGE: {0:F0} ", fpsAvg);
-            Vector2 szAvg = sAvg.CalcSize(new GUIContent(avgStr));
-
-            float itemGap = 0f;
-            float totalWidth = szCur.x + szMax.x + szAvg.x + itemGap * 2;
-            float lineHeight = szCur.y;
-            float startX = x - totalWidth / 2f;
-            float bgY = y - lineHeight;
-
-            GUI.DrawTexture(new Rect(startX, bgY, totalWidth, lineHeight), blackTex);
-
-            float curX = startX;
-            GUI.Label(new Rect(curX, bgY, szCur.x, lineHeight), curStr, sCur);
-
-            float maxX = curX + szCur.x + itemGap;
-            GUI.Label(new Rect(maxX, bgY, szMax.x, lineHeight), maxStr, sMax);
-
-            float avgX = maxX + szMax.x + itemGap;
-            GUI.Label(new Rect(avgX, bgY, szAvg.x, lineHeight), avgStr, sAvg);
+            catch (Exception ex) { ModLog.Error("HackMenu.DrawScaleDialog", ex); }
         }
 
-        void DrawWatermark()
+        private void ApplyScaleInput(bool closeOnInvalid)
         {
-            bool show;
-            lock (Lock)
+            int v;
+            if (int.TryParse(this.scaleInput, out v))
             {
-                show = ActiveFeatures.Contains("水印");
+                this.scalePercent = Mathf.Clamp(v, 0f, 100f);
+                this.RecalculateMenuPositions();
+                foreach (var kv in this.menuRects)
+                    this.menuRects[kv.Key] = this.ClampRectToScreen(kv.Value);
+                this.showScaleDialog = false;
+                GUI.FocusControl(null);
+                this.lastStyleScale = -1f;
             }
-            if (!show) return;
-
-            InitStyles();
-
-            float scale = GetScale();
-            float x = 20f * scale;
-            float y = Screen.height - 20f * scale;
-
-            string timeStr = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss");
-            string procStr = "Baldis Basics Classic Mods Hack 1.6 By JisGreen";
-            string logoStr = "Press Tab To Open Or Close Menu";
-
-            Color c1 = gradientEffect ? GetRainbowColor(hue) : Color.white;
-            Color c2 = gradientEffect ? GetRainbowColor((hue + 40f) % 360f) : Color.white;
-            Color c3 = gradientEffect ? GetRainbowColor((hue + 80f) % 360f) : Color.white;
-
-            GUIStyle ws = new GUIStyle(GUI.skin.label);
-            ws.fontSize = (int)(36f * scale);
-            ws.alignment = (TextAnchor)3;
-            ws.normal.background = blackTex;
-
-            GUIStyle s1 = new GUIStyle(ws);
-            s1.normal.textColor = c1;
-            Vector2 sz1 = s1.CalcSize(new GUIContent(" " + timeStr + " "));
-
-            GUIStyle s2 = new GUIStyle(ws);
-            s2.normal.textColor = c2;
-            Vector2 sz2 = s2.CalcSize(new GUIContent(" " + logoStr + " "));
-
-            GUIStyle s3 = new GUIStyle(ws);
-            s3.normal.textColor = c3;
-            Vector2 sz3 = s3.CalcSize(new GUIContent(" " + procStr + " "));
-
-            float totalHeight = sz1.y + sz2.y + sz3.y;
-            float startY = y - totalHeight;
-
-            GUI.Label(new Rect(x, startY, sz1.x, sz1.y), " " + timeStr + " ", s1);
-            GUI.Label(new Rect(x, startY + sz1.y, sz2.x, sz2.y), " " + logoStr + " ", s2);
-            GUI.Label(new Rect(x, startY + sz1.y + sz2.y, sz3.x, sz3.y), " " + procStr + " ", s3);
-        }
-
-        void DrawFeatureList()
-        {
-            bool show;
-            lock (Lock)
+            else if (closeOnInvalid)
             {
-                show = ActiveFeatures.Contains("功能列表");
-            }
-            if (!show) return;
-
-            InitStyles();
-
-            float scale = GetScale();
-
-            List<string> features;
-            lock (Lock)
-            {
-                features = new List<string>(ActiveFeatures);
-            }
-            if (features.Count == 0) return;
-
-            features.Sort((a, b) => CalcTextWidth(GetDisplayText(b), (int)(36f * scale)).CompareTo(CalcTextWidth(GetDisplayText(a), (int)(36f * scale))));
-
-            float x = Screen.width - 20f * scale;
-            float y = 20f * scale;
-
-            for (int i = 0; i < features.Count; i++)
-            {
-                string f = features[i];
-                string display = GetDisplayText(f);
-                Color col = gradientEffect ? GetItemColor(i, features.Count) : Color.white;
-                float w = CalcTextWidth(display, (int)(36f * scale)) + 40f * scale;
-
-                GUIStyle st = new GUIStyle(cachedListItemStyle);
-                st.normal.textColor = col;
-                st.normal.background = blackTex;
-
-                GUI.Label(new Rect(x - w, y, w, 52f * scale), " " + display + " ", st);
-                y += 52f * scale;
+                this.scaleInput = Mathf.RoundToInt(this.scalePercent).ToString();
             }
         }
 
-        public static float CalcTextWidth(string text, int fontSize)
+        private Color GetRainbowColor(float h)
         {
-            GUIStyle temp = new GUIStyle(GUI.skin.label);
-            temp.fontSize = fontSize;
-            return temp.CalcSize(new GUIContent(text)).x;
-        }
-
-        Color GetItemColor(int index, int total)
-        {
-            if (total <= 1) return GetRainbowColor(hue);
-            float step = total <= 12 ? 30f : 360f / total;
-            float itemHue = (hue - (index * step) + 720f) % 360f;
-            return GetRainbowColor(itemHue);
-        }
-
-        Color GetRainbowColor(float h)
-        {
-            h = h % 360f;
-            if (h < 0) h += 360f;
-
-            float hd = h / 60f;
-            int hi = (int)Mathf.Floor(hd) % 6;
-            float f = hd - Mathf.Floor(hd);
-
-            switch (hi)
+            h %= 360f;
+            if (h < 0f) h += 360f;
+            float seg = h / 60f;
+            int i = (int)Mathf.Floor(seg) % 6;
+            float f = seg - Mathf.Floor(seg);
+            switch (i)
             {
                 case 0: return new Color(1f, f, 0f);
                 case 1: return new Color(1f - f, 1f, 0f);
@@ -1048,23 +768,12 @@ namespace UniversalHack
             }
         }
 
-        Texture2D MakeTex(Color col)
+        private Texture2D MakeTex(Color c)
         {
-            Texture2D t = new Texture2D(1, 1);
-            t.SetPixel(0, 0, col);
+            var t = new Texture2D(1, 1);
+            t.SetPixel(0, 0, c);
             t.Apply();
             return t;
-        }
-
-        void OnDestroy()
-        {
-            if (whiteTex != null) Destroy(whiteTex);
-            if (bgTex != null) Destroy(bgTex);
-            if (titleBgTex != null) Destroy(titleBgTex);
-            if (blackTex != null) Destroy(blackTex);
-            if (grayTex != null) Destroy(grayTex);
-            if (checkTex != null) Destroy(checkTex);
-            if (dialogBgTex != null) Destroy(dialogBgTex);
         }
     }
 }
