@@ -1,5 +1,4 @@
-﻿using HarmonyLib;
-using System.Reflection;
+using HarmonyLib;
 using UnityEngine;
 
 namespace UniversalHack
@@ -8,62 +7,43 @@ namespace UniversalHack
     {
         private Harmony harmony;
 
-        void Awake()
-        {
-            harmony = new Harmony("com.universal.mousefix");
-
-            var cursorMethod = typeof(Patches).GetMethod("CursorUpdate_Prefix", BindingFlags.Static | BindingFlags.Public);
-            var mouseMethod = typeof(Patches).GetMethod("MouseAppearing_Prefix", BindingFlags.Static | BindingFlags.Public);
-
-            PatchMethod("InGameCursorController", "Update", cursorMethod);
-            PatchMethod("MouseAppearingScript", "Update", mouseMethod);
-        }
-
-        void PatchMethod(string typeName, string methodName, MethodInfo prefix)
+        private void Awake()
         {
             try
             {
-                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    foreach (var type in asm.GetTypes())
-                    {
-                        if (type.Name == typeName)
-                        {
-                            var method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                            if (method != null)
-                            {
-                                harmony.Patch(method, prefix != null ? new HarmonyMethod(prefix) : null);
-                                return;
-                            }
-                        }
-                    }
-                }
+                this.harmony = new Harmony("com.universal.mousefix");
+                PatchHelper.Patch(this.harmony, "InGameCursorController", "Update", typeof(Patches).GetMethod("CursorUpdate_Prefix"));
+                PatchHelper.Patch(this.harmony, "MouseAppearingScript", "Update", typeof(Patches).GetMethod("MouseAppearing_Prefix"));
             }
             catch { }
         }
 
-        void OnDestroy()
+        private void OnDestroy()
         {
-            if (harmony != null)
-            {
-                try { harmony.UnpatchAll("com.universal.mousefix"); } catch { }
-            }
+            try { this.harmony?.UnpatchSelf(); } catch { }
         }
 
         public static class Patches
         {
             public static bool CursorUpdate_Prefix()
             {
-                if (HackMenu.ShowMenu)
+                try
                 {
-                    Cursor.visible = true;
-                    Cursor.lockState = CursorLockMode.None;
-                    return false;
+                    if (HackMenu.ShowMenu)
+                    {
+                        Cursor.visible = true;
+                        Cursor.lockState = CursorLockMode.None;
+                        return false;
+                    }
+                    return true;
                 }
-                return true;
+                catch { return true; }
             }
 
-            public static bool MouseAppearing_Prefix() => !HackMenu.ShowMenu;
+            public static bool MouseAppearing_Prefix()
+            {
+                try { return !HackMenu.ShowMenu; } catch { return true; }
+            }
         }
     }
 }
